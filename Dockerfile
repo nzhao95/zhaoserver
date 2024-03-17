@@ -11,7 +11,6 @@ WORKDIR /usr/src/zhaoserver
 
 RUN apt-get update && apt-get install -y libssl-dev pkg-config
 
-
 # Build the application.
 # Leverage a cache mount to /usr/local/cargo/registry/
 # for downloaded dependencies, a cache mount to /usr/local/cargo/git/db
@@ -21,7 +20,6 @@ RUN apt-get update && apt-get install -y libssl-dev pkg-config
 # source code into the container. Once built, copy the executable to an
 # output directory before the cache mounted /app/target is unmounted.
 RUN --mount=type=bind,source=src,target=src \
-    --mount=type=bind,source=.env,target=.env \
     --mount=type=bind,source=templates,target=templates \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
     --mount=type=bind,source=Cargo.lock,target=Cargo.lock \

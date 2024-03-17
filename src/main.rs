@@ -2,7 +2,6 @@ use axum::{http::StatusCode, routing::get, Router};
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use askama::Template;
-use dotenv::dotenv;
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::net::SocketAddr;
@@ -171,19 +170,20 @@ async fn fetch_weather(lat_long : &LatLong) -> Result<WeatherResponse, anyhow::E
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Starting Zhao Server");
-    dotenv().ok();
 	let db_connection_str = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
 	let pool = sqlx::PgPool::connect(&db_connection_str)
     	.await
     	.context("can't connect to database")?;
 
-	let app = Router::new()
+    println!("Database connection successful");
+    
+    let app = Router::new()
     	.route("/", get(index))
     	.route("/weather", get(weather))
     	.route("/stats", get(stats))
     	.with_state(pool);
 
-	let addr = SocketAddr::from(([127, 0, 0, 1], 8888));
+	let addr = SocketAddr::from(([0, 0, 0, 0], 8888));
     let tcp = TcpListener::bind(&addr).await.unwrap();
 
     axum::serve(tcp, app.into_make_service()).await?;
