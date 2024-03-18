@@ -7,7 +7,7 @@ ARG APP
 # Create a stage for building the application.
 
 FROM rust:slim AS build
-WORKDIR /usr/src/zhaoserver
+WORKDIR /usr/src/zserver
 
 RUN apt-get update && apt-get install -y libssl-dev pkg-config
 
@@ -27,7 +27,7 @@ RUN --mount=type=bind,source=src,target=src \
     --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
 cargo build --locked --release && \
-    install -Dsvm755 ./target/release/zhaoserver ./bin/zhaoserver
+    install -Dsvm755 ./target/release/zserver ./bin/zserver
 
 ################################################################################
 # Create a new stage for running the application that contains the minimal
@@ -56,10 +56,10 @@ RUN adduser \
 USER appuser
 
 # Copy the executable from the "build" stage.
-COPY --from=build /usr/src/zhaoserver/bin /app
+COPY --from=build /usr/src/zserver/bin /app
 
 # Expose the port that the application listens on.
 EXPOSE 8888
 
 # What the container should run when it is started.
-ENTRYPOINT [ "/app/zhaoserver" ]
+ENTRYPOINT [ "/app/zserver" ]

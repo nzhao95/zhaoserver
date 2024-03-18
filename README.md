@@ -4,12 +4,20 @@ This package should give you a minimalistic setup of a **Rust** web backend runn
 
 # Setup 
 
-Install **Docker** then run the open a command prompt at the project location and run the following commands 
+Install **Docker** or make sure the Docker daemon is running. Open a command prompt at the project location and build the docker image for the server : 
+
 
 ```
-docker build -t zhaoserver .
+docker build -t zserver zserver/.
+```
+
+Launch the server with Docker Compose
+
+```
 docker compose up 
 ```
+
+You should be able to access your server on port 8888:8888. Open you web browser and go to http://localhost:8888
 
 # Weather query exemple
 

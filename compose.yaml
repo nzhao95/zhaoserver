@@ -9,13 +9,13 @@
 # https://github.com/docker/awesome-compose
 services:
   server:
-    container_name: zhaoserver
-    image: zhaoserver
+    container_name: zserver
+    image: zserver
     build:
-      context: .
+      context: zserver/.
       target: final
     env_file:
-      - .env
+      - zserver/.env
     ports:
       - 8888:8888
 # The commented out section below is an example of how to define a PostgreSQL
