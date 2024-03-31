@@ -10,7 +10,6 @@ FROM rust:slim AS build
 WORKDIR /usr/src/zserver
 
 RUN apt-get update && apt-get install -y libssl-dev pkg-config
-
 # Build the application.
 # Leverage a cache mount to /usr/local/cargo/registry/
 # for downloaded dependencies, a cache mount to /usr/local/cargo/git/db
@@ -22,11 +21,10 @@ RUN apt-get update && apt-get install -y libssl-dev pkg-config
 RUN --mount=type=bind,source=src,target=src \
     --mount=type=bind,source=templates,target=templates \
     --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
-    --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
     --mount=type=cache,target=/app/target/ \
     --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
-cargo build --locked --release && \
+cargo build --release && \
     install -Dsvm755 ./target/release/zserver ./bin/zserver
 
 ################################################################################
@@ -41,6 +39,8 @@ cargo build --locked --release && \
 # (e.g., alpine@sha256:664888ac9cfd28068e062c991ebcff4b4c7307dc8dd4df9e728bedde5c449d91).
 FROM ubuntu:latest AS final
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y ca-certificates
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
@@ -57,6 +57,7 @@ USER appuser
 
 # Copy the executable from the "build" stage.
 COPY --from=build /usr/src/zserver/bin /app
+COPY templates/index.html app/
 
 # Expose the port that the application listens on.
 EXPOSE 8888

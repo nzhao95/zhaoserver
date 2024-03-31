@@ -1,192 +1,128 @@
-use axum::{http::StatusCode, routing::get, Router};
-use axum::extract::{Query, State};
-use axum::response::{IntoResponse, Response};
-use askama::Template;
+pub use self::error::{Error, Result};
+
+use crate::ctx::Ctx;
+use crate::log::log_request;
+use crate::model::ModelController;
+use axum::extract::{Path, Query};
+use axum::http::{Method, Uri};
+use axum::response::{Html, IntoResponse, Response};
+use axum::routing::{get, get_service};
+use axum::{middleware, Json, Router};
 use serde::Deserialize;
-use sqlx::PgPool;
+use serde_json::json;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
-use anyhow::Context;
+use tower_cookies::CookieManagerLayer;
+use tower_http::services::ServeDir;
+use uuid::Uuid;
 
-// Make our own error that wraps `anyhow::Error`.
-struct AppError(anyhow::Error);
-
-// Tell axum how to convert `AppError` into a response.
-impl IntoResponse for AppError {
-	fn into_response(self) -> Response {
-    	(
-        	StatusCode::INTERNAL_SERVER_ERROR,
-        	format!("Something went wrong: {}", self.0),
-    	)
-        	.into_response()
-	}
-}
-
-// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
-// `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for AppError
-where
-	E: Into<anyhow::Error>,
-{
-	fn from(err: E) -> Self {
-    	Self(err.into())
-	}
-}
-
-#[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate;
-
-async fn index() -> IndexTemplate {
-	IndexTemplate
-}
-
-#[derive(Deserialize)]
-pub struct WeatherQuery {
-	pub city: String,
-}
-
-async fn weather(Query(weather_query) : Query<WeatherQuery>, State(pool) : State<PgPool>) -> Result<WeatherDisplay, AppError> {
-	
-	let city = &weather_query.city;
-    let lat_long = get_lat_long(&pool, city)
-        .await?;
-	let weather = fetch_weather(&lat_long)
-    	.await?;
-    
-	Ok(WeatherDisplay::new(&city, &weather))
-}
-
-async fn stats() -> &'static str {
-	"Stats"
-}
-
-#[derive(Deserialize)]
-pub struct GeoResponse {
-	pub results: Vec<LatLong>,
-}
-
-
-#[derive(sqlx::FromRow, Deserialize, Debug, Clone)]
-pub struct LatLong {
-	pub latitude: f64,
-	pub longitude: f64,
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct WeatherResponse {
-	pub latitude: f64,
-	pub longitude: f64,
-    pub timezone : String,
-    pub hourly : Hourly
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Hourly {
-    pub time : Vec<String>,
-    pub temperature_2m : Vec<f64>
-}
-
-#[derive(Template, Deserialize, Debug, Clone)]
-#[template(path = "weather.html")]
-pub struct WeatherDisplay {
-    pub city : String, 
-    pub forecasts : Vec<Forecast>
-}
-
-#[derive(Deserialize, Debug, Clone)]
-pub struct Forecast {
-    pub date : String, 
-    pub temperature : String
-}
-
-impl WeatherDisplay {
-    pub fn new(city : &str, response : &WeatherResponse) -> WeatherDisplay {
-        WeatherDisplay {
-            city : city.to_owned(),
-            forecasts : response.hourly.time
-            .iter()
-            .zip(response.hourly.temperature_2m.iter())
-            .map(|(time, temperature)| Forecast { date : time.clone(),
-                temperature : temperature.to_string()})
-            .collect()
-        }
-    }
-}
-
-async fn get_lat_long(pool :&PgPool, city_name: &str) -> Result<LatLong, anyhow::Error> {
-    let lat_long = sqlx::query_as::<_, LatLong>(
-        "SELECT lat AS latitude, long AS longitude FROM cities WHERE name = $1",
-    )
-    .bind(city_name)
-    .fetch_optional(pool)
-    .await?;
-
-    if let Some(lat_long) = lat_long {
-        return Ok(lat_long);
-    }
-
-    let lat_long = fetch_lat_long(city_name).await?;
-
-    sqlx::query("INSERT INTO cities (name, lat, long) VALUES ($1, $2, $3)" )
-    .bind(city_name)
-    .bind(lat_long.latitude)
-    .bind(lat_long.longitude)
-    .execute(pool)
-    .await?;
-
-    Ok(lat_long)
-} 
-
-async fn fetch_lat_long(city : &str) -> Result<LatLong, anyhow::Error> {
-    let endpoint = format!(
-    	"https://geocoding-api.open-meteo.com/v1/search?name={}&count=1&language=en&format=json",
-    	city
-	);
-
-    let response = reqwest::get(&endpoint)
-    .await?
-    .json::<GeoResponse>()
-    .await?;
-    response.results
-    .get(0)
-    .cloned()
-    .context("")
-    
-}
-
-async fn fetch_weather(lat_long : &LatLong) -> Result<WeatherResponse, anyhow::Error> {
-    let endpoint = format!(
-    	"https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&hourly=temperature_2m",
-    	lat_long.latitude, lat_long.longitude
-	);
-
-    let response = reqwest::get(&endpoint)
-    .await?.json::<WeatherResponse>().await?;
-
-    Ok(response)
-}
+mod ctx;
+mod error;
+mod log;
+mod model;
+mod web;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    println!("Starting Zhao Server");
-	let db_connection_str = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-	let pool = sqlx::PgPool::connect(&db_connection_str)
-    	.await
-    	.context("can't connect to database")?;
+async fn main() -> Result<()> {
+	// Initialize ModelController.
+	let mc = ModelController::new().await?;
 
-    println!("Database connection successful");
-    
-    let app = Router::new()
-    	.route("/", get(index))
-    	.route("/weather", get(weather))
-    	.route("/stats", get(stats))
-    	.with_state(pool);
+	let routes_apis = web::routes_tickets::routes(mc.clone())
+		.route_layer(middleware::from_fn(web::mw_auth::mw_require_auth));
 
-	let addr = SocketAddr::from(([0, 0, 0, 0], 8888));
-    let tcp = TcpListener::bind(&addr).await.unwrap();
+	let routes_all = Router::new()
+		.merge(routes_hello())
+		.merge(web::routes_login::routes())
+		.nest("/api", routes_apis)
+		.layer(middleware::map_response(main_response_mapper))
+		.layer(middleware::from_fn_with_state(
+			mc.clone(),
+			web::mw_auth::mw_ctx_resolver,
+		))
+		.layer(CookieManagerLayer::new())
+		.fallback_service(routes_static());
 
-    axum::serve(tcp, app.into_make_service()).await?;
-    
+	// region:    --- Start Server
+	let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+	println!("->> LISTENING on {:?}\n", listener.local_addr());
+	axum::serve(listener, routes_all.into_make_service())
+		.await
+		.unwrap();
+	// endregion: --- Start Server
+
 	Ok(())
 }
+
+async fn main_response_mapper(
+	ctx: Option<Ctx>,
+	uri: Uri,
+	req_method: Method,
+	res: Response,
+) -> Response {
+	println!("->> {:<12} - main_response_mapper", "RES_MAPPER");
+	let uuid = Uuid::new_v4();
+
+	// -- Get the eventual response error.
+	let service_error = res.extensions().get::<Error>();
+	let client_status_error = service_error.map(|se| se.client_status_and_error());
+
+	// -- If client error, build the new reponse.
+	let error_response =
+		client_status_error
+			.as_ref()
+			.map(|(status_code, client_error)| {
+				let client_error_body = json!({
+					"error": {
+						"type": client_error.as_ref(),
+						"req_uuid": uuid.to_string(),
+					}
+				});
+
+				println!("    ->> client_error_body: {client_error_body}");
+
+				// Build the new response from the client_error_body
+				(*status_code, Json(client_error_body)).into_response()
+			});
+
+	// Build and log the server log line.
+	let client_error = client_status_error.unzip().1;
+	// TODO: Need to hander if log_request fail (but should not fail request)
+	let _ =
+		log_request(uuid, req_method, uri, ctx, service_error, client_error).await;
+
+	println!();
+	error_response.unwrap_or(res)
+}
+
+fn routes_static() -> Router {
+	Router::new().nest_service("/", get_service(ServeDir::new("./")))
+}
+
+// region:    --- Routes Hello
+fn routes_hello() -> Router {
+	Router::new()
+		.route("/hello", get(handler_hello))
+		.route("/hello2/:name", get(handler_hello2))
+}
+
+#[derive(Debug, Deserialize)]
+struct HelloParams {
+	name: Option<String>,
+}
+
+// e.g., `/hello?name=Jen`
+async fn handler_hello(Query(params): Query<HelloParams>) -> impl IntoResponse {
+	println!("->> {:<12} - handler_hello - {params:?}", "HANDLER");
+
+	let name = params.name.as_deref().unwrap_or("World!");
+	Html(format!("Hello <strong>{name}</strong>"))
+}
+
+// e.g., `/hello2/Mike`
+async fn handler_hello2(Path(name): Path<String>) -> impl IntoResponse {
+	println!("->> {:<12} - handler_hello2 - {name:?}", "HANDLER");
+
+	Html(format!("Hello2 <strong>{name}</strong>"))
+}
+
+// endregion: --- Routes Hello
