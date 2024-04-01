@@ -18,7 +18,7 @@ async fn create_ticket(
 	ctx: Ctx,
 	Json(ticket_fc): Json<TicketForCreate>,
 ) -> Result<Json<Ticket>> {
-	println!("->> {:<12} - create_ticket", "HANDLER");
+	debug!( "{:<12} - create_ticket", "HANDLER");
 
 	let ticket = mc.create_ticket(ctx, ticket_fc).await?;
 
@@ -29,7 +29,7 @@ async fn list_tickets(
 	State(mc): State<ModelController>,
 	ctx: Ctx,
 ) -> Result<Json<Vec<Ticket>>> {
-	println!("->> {:<12} - list_tickets", "HANDLER");
+	debug!( "{:<12} - list_tickets", "HANDLER");
 
 	let tickets = mc.list_tickets(ctx).await?;
 

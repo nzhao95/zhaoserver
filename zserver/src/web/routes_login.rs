@@ -1,19 +1,20 @@
-use crate::{web, Error, Result};
+use crate::web::{self, Error, Result};
 use axum::routing::post;
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tower_cookies::{Cookie, Cookies};
+use tracing::debug;
 
 pub fn routes() -> Router {
-	Router::new().route("/api/login", post(api_login))
+	Router::new().route("/api/login", post(api_login_handler))
 }
 
-async fn api_login(
+async fn api_login_handler(
 	cookies: Cookies,
 	payload: Json<LoginPayload>,
 ) -> Result<Json<Value>> {
-	println!("->> {:<12} - api_login", "HANDLER");
+	debug!( "{:<12} - api_login_handler", "HANDLER");
 
 	// TODO: Implement real db/auth logic.
 	if payload.username != "demo1" || payload.pwd != "welcome" {
@@ -21,10 +22,7 @@ async fn api_login(
 	}
 
 	// FIXME: Implement real auth-token generation/signature.
-	let mut cookie = Cookie::new(web::AUTH_TOKEN, "user-1.exp.sign");
-	cookie.set_http_only(true);
-	cookie.set_path("/");
-	cookies.add(cookie);
+	cookies.add(Cookie::new(web::AUTH_TOKEN, "user-1.exp.sign"));
 
 	// Create the success body.
 	let body = Json(json!({

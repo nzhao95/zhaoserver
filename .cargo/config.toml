@@ -1,0 +1,3 @@
+[env]
+RUST_LOG = "zserver=debug"
+SERVICE_WEB_FOLDER="zserver/web-folder/"

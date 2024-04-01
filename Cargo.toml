@@ -2,3 +2,10 @@
 members = ["zserver"]
 default-members = ["zserver"]
 resolver = "2"
+
+[lints]
+workspace = true
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused = "allow" # For experimental dev.
