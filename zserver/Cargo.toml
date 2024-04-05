@@ -18,11 +18,18 @@ tower-http = { version = "0.4", features = ["fs"] }
 tower-cookies = "0.9"
 # -- Data
 sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "time"] }
+sqlb = "0.3"
 # -- Tracing
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["env-filter"]}
+# -- Crypt & Encoding 
+rand = "0.8"
+hmac = "0.12"
+sha2 = "0.10"
+base64-url = "2"
 # -- Others
 uuid = {version = "1", features = ["v4","fast-rng",]}
+time = "0.3"
 lazy-regex = "3"
 async-trait = "0.1"
 strum_macros = "0.25"
@@ -31,3 +38,4 @@ strum_macros = "0.25"
 [dev-dependencies]
 anyhow = "1"
 httpc-test = "0.1.1"
+serial_test = "2"

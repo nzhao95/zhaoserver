@@ -1,3 +1,34 @@
+# Cargo config file. 
+# See: https://doc.rust-lang.org/cargo/reference/config.html
+
+# Environments variables set for all `cargo ...` commands.
+
 [env]
+# Scope down tracing, to filter out external lib tracing.
 RUST_LOG = "zserver=debug"
+
+# -- Service Environment Variables
+# IMPORTANT: 
+#   For cargo commands only.
+#   For deployed env, should be managed by container 
+#   (e.g., Kubernetes).
+
+## -- Secrets
+# Keys and passwords below are for localhost dev ONLY.
+# e.g., "welcome" type of passwords.
+# i.e., Encryption not needed.
+
+SERVICE_DB_URL="postgres://app_user:dev_only_pwd@localhost/app_db"
+
+SERVICE_PWD_KEY="TWDUUyIJM9oMHEOFz4OaYpdHhhs96GbGpbyNeCuZxe1BGX8HRY92wSBRwcRQ7AT21glAi63iu9XukbFn0FjRwg"
+
+SERVICE_TOKEN_KEY = "_1blZm4evMt04nSfpy0zyE2PjA2WzTyB61_dy1R4l4-NYN-8O9ssNeCkw1dLnnzKwcgYWWfiExsw1uWBpV9jzw"
+
+SERVICE_TOKEN_DURATION_SEC="1800" # 30 minutes
+
+## -- ConfigMap
+
+# This will be relative to Cargo.toml
+# In deployed images, probably use absolute path.
+
 SERVICE_WEB_FOLDER="zserver/web-folder/"
